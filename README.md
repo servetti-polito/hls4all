@@ -1,4 +1,4 @@
 hls4all
 =======
 
-HLS for ALL
+HTTP Live Streaming (HLS) for ALL
