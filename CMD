@@ -1,0 +1,9 @@
+
+xclock -update 1 -twentyfour
+
+export LD_LIBRARY_PATH=/home/servetti/src/lib/
+sh hls4all_purge.sh; ~/src/bin/ffmpeg -y -f x11grab -s 164x164 -i :0.0+66,885  -r 30 -c:v libvpx  -g 1 -map 0 -quality realtime -f segment -segment_list playlist.txt  -segment_time 10  %d.webm
+# sh hls4all_purge.sh; ; ~/src/bin/ffmpeg -y -f video4linux2 -i /dev/video0 -c:v libvpx -quality realtime  -g 1 -map 0 -f segment -segment_list playlist.local.txt  -segment_time 10  %d.webm
+
+# ssh-add /home/servetti/.ssh/d004112@areeweb.polito.it
+# tail -f playlist.txt | ( old1="tmp"; old2="tmp"; old3="tmp"; while read filename ; do bash hls4all_transfer.sh $filename $old3 $old2 $old1; old3=$old2; old2=$old1; old1=$filename ;  done )

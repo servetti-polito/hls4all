@@ -1,0 +1,221 @@
+
+<html>
+<head>
+
+<!--read source PL-->
+
+<!-- sh hls4all_purge.sh; ; ~/src/bin/ffmpeg -y -f video4linux2 -i /dev/video0 -c:v libvpx -quality realtime  -g 1 -map 0 -f segment -segment_list playlist.local.txt  -segment_time 10  %d.webm -->
+
+<!-- xclock -update 1 -->
+<!-- export LD_LIBRARY_PATH=/home/servetti/src/lib/ -->
+<!-- ssh-add /home/servetti/.ssh/d004112@areeweb.polito.it -->
+
+<!-- sh hls4all_purge.sh; ~/src/bin/ffmpeg -y -f x11grab -s 164x164 -i :0.0+66,885  -r 30 -c:v libvpx  -g 1 -map 0 -quality realtime -f segment -segment_list playlist.local.txt  -segment_time 10  %d.webm -->
+
+<!-- tail -f playlist.local.txt | ( old1="tmp"; old2="tmp"; old3="tmp"; while read filename ; do bash hls4all_transfer.sh $filename $old3 $old2 $old1; old3=$old2; old2=$old1; old1=$filename ;  done ) -->
+
+<!-- 
+# hls4all_purge.sh
+rm *.webm
+at now +1 hour -f hls4all_purge.sh
+-->
+
+<!--
+FILENAME=$1; 
+RMFILENAME=$2;
+NARGS=$#;
+> playlist.txt
+for ((i=3; i<=$NARGS; i++)); do
+echo "${!i}" >> playlist.txt
+done
+echo "$FILENAME" >> playlist.txt
+( echo "cd htdocs" ; echo "cd hls4all" ; echo "put $FILENAME" ; echo "put playlist.txt" ; echo "rm $RMFILENAME" ) | sftp -b - d004112@areeweb.polito.it
+-->
+
+<script type="text/javascript">
+
+	var xmlhttp = new XMLHttpRequest();
+	var video_elems = new Array();
+	var seg_history = new Array();
+	var segment_delay = 0; // measure: segments
+	var lines;
+	var cnt;
+	var last;
+
+	var dejitter_delay = 3000;	// ms
+	var prebuffering_delay = 5000;
+	var hls4all_div;
+
+	function load(cur) { 
+		var txt = "Playing " + last + " of: ";
+
+		last = getNext(last);
+		video_elems[cur].src = last;
+		video_elems[cur].mysrc = last;
+		seg_history[video_elems[cur].mysrc] = new Object();
+		var ts = new Date().getTime();
+		console.log("Prebuffering: " + last + " on " + cur + " at " + ts);
+		seg_history[video_elems[cur].mysrc].prebuffering = ts;
+
+		xmlhttp = new XMLHttpRequest();
+		xmlhttp.open("GET","playlist.txt",false); // the false makes this synchronous!
+		xmlhttp.send(null);
+		var text = xmlhttp.responseText;
+		lines = text.split("\n");
+		for(var k=0;k<lines.length;k++) { txt += lines[k] + " "; } console.log(txt);
+
+	}
+
+	function swap(evt) {
+		var cur = this.n, next;
+
+		if(cur == 0) { next = 1; } else { next = 0; }
+
+		console.log("Current ended at: " + video_elems[cur].currentTime);
+
+		video_elems[next].play(); 
+
+		console.log("Segment " + video_elems[next].mysrc + " prebuffered at " + seg_history[video_elems[next].mysrc].prebuffering + " last " + seg_history[video_elems[next].mysrc].duration + ".");
+		
+		video_elems[cur].style.display = "none";
+		video_elems[next].style.display = "inline";
+
+		document.getElementById("playing").innerHTML = "Playing: " + video_elems[next].src;
+
+		//video_elems[cur].src = last;
+
+		// FIXME: trigger on playout start of first segment
+		setTimeout( function() { 
+				console.log("Current time: " + video_elems[next].currentTime + " of " + next);
+				load(cur); 
+				}, prebuffering_delay);
+
+	}
+
+	function getNext(last) { return last.replace(/\d+/, function(val) { return parseInt(val,10)+1; }) }
+
+	function showDuration(e) { 
+		var velm = this;
+		seg_history[velm.mysrc].duration = velm.duration;
+		document.getElementById("duration_").innerHTML = "of " + velm.mysrc + " is " + seg_history[velm.mysrc].duration + " (" + seg_history[velm.mysrc].prebuffering + ")"; 
+	}
+
+	function startPlayout() {
+		console.log("Starting playout");
+
+		var velms = video_elems;
+
+		// Register callbacks
+		velms[0].addEventListener("ended",swap,false);
+		velms[1].addEventListener("ended",swap,false);
+
+		velms[0].addEventListener('timeupdate',eventTime);
+		velms[1].addEventListener('timeupdate',eventTime);
+
+		velms[0].addEventListener('loadstart',loadStart);
+		velms[1].addEventListener('loadstart',loadStart);
+
+		velms[0].addEventListener('durationchange', showDuration );
+		velms[1].addEventListener('durationchange', showDuration );
+
+		velms[0].addEventListener('canplay', function() { console.log("Canplay " + this.src + "\n" ); });
+		velms[1].addEventListener('canplay', function() { console.log("Canplay " + this.src + "\n" ); });
+
+		velms[0].src = last;
+		cnt = 2;
+		velms[0].play(); 
+
+		document.getElementById("playing").innerHTML = "Playing: " + last;
+		var txt = "Playing " + last + " of: ";
+		for(var k=0;k<lines.length;k++) { txt += lines[k] + " "; } console.log(txt);
+
+		setTimeout( function() { 
+				console.log("Current time: " + velms[0].currentTime);
+				load(1); 
+				}, prebuffering_delay);
+
+	}
+
+	window.onload = function () {	
+
+		hls4all_div = document.getElementById("hls4all");
+
+		var vel0 = document.createElement("video");
+		var vel1 = document.createElement("video");
+
+		vel0.style.display = "inline"; 
+		vel0.style.border = "10px solid red"; 
+		vel0.n = 0;
+
+		vel1.style.display = "none"; 
+		vel1.style.border = "10px solid green"; 
+		vel1.n = 1;
+
+		hls4all_div.appendChild(vel0);
+		hls4all_div.appendChild(vel1);
+
+		video_elems[0] = vel0;
+		video_elems[1] = vel1;
+
+
+		xmlhttp.open("GET","playlist.txt",false); // the false makes this synchronous!
+		xmlhttp.send(null);
+		var text = xmlhttp.responseText;
+
+		// but we want to process that one line at a time.
+		lines = text.split("\n");
+		if(lines.length >= (segment_delay+2)) {
+			// start playout 
+			last = lines[lines.length-(segment_delay+2)];
+			setTimeout( startPlayout, dejitter_delay);
+			console.log("Waiting for dejitter");
+		} else {
+			// no video available
+			alert("Live streaming not jet started, please try again later.");
+		}
+
+		setInterval( function () { 
+			var dt = new Date();
+			document.getElementById("showTime_").innerHTML = dt.toLocaleTimeString();
+			}, 1000);
+
+
+	}
+
+	function eventTime() {
+		document.getElementById("currentTime").innerHTML = this.currentTime;
+	};
+
+	function loadStart() {
+		console.log("loadstart on: " + this.src);
+	};
+
+</script>
+
+</head>
+
+<body>
+	<div style="margin: auto; width: 800px; text-align: center;">
+	<h1>Custom HTTP pull streaming proof of concept</h1>
+	<p style="text-align: left;" id="playing">Playing: </p>
+	<p style="text-align: left;">CurrentTime: <span id="currentTime"></span></p>
+	<p style="text-align: left;">Playlist: <span id="playlist_">_</span></p>
+	<p style="text-align: left;">Duration: <span id="duration_"></span></p>
+	<p style="text-align: left;">System time: <span id="showTime_"></span></p>
+
+
+	<div id='hls4all'></div>
+
+	<!--
+		<video id="video1" n="0" style="display: inline; border: 10px solid red;">
+			<source src=""/> 
+		</video>
+
+		<video id="video2" n="1"style="display: none; border: 10px solid green;">
+			<source src=""/> 
+		</video>
+	-->
+	
+
+</body>
+</html>
